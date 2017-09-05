@@ -1,5 +1,5 @@
 #include "tim.h"
-#include "dht.h"
+#include "dht22.h"
 
 #include <stm32f10x.h>
 
