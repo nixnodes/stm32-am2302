@@ -18,27 +18,24 @@
 
 typedef struct dht22_data
 {
+  volatile uint8_t rcv_response;
   volatile float temperature;
   volatile float humidity;
-  volatile uint32_t received;
-  volatile uint32_t actual;
-  volatile uint32_t rcv_response;
+  uint8_t parity;
+  uint8_t parity_rcv;
+  uint8_t hMSB;
+  uint8_t hLSB;
+  uint8_t tMSB;
+  uint8_t tLSB;
+  uint8_t bits[40];
 } dht22_data;
 
 void
 DHT22_Init (void);
-uint32_t
-DHT22_GetReadings (void);
-uint16_t
-DHT22_DecodeReadings (void);
-uint16_t
-DHT22_GetHumidity (void);
-uint16_t
-DHT22_GetTemperature (void);
 
 #include "types.h"
 
 bool
-DHT22_Read (volatile dht22_data *out);
+DHT22_Read (dht22_data *out);
 
 #endif /* DHT22_H_ */

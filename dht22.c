@@ -4,14 +4,6 @@
 #include <stm32f10x_rcc.h>
 #include <stm32f10x_gpio.h>
 
-static uint8_t bits[40];
-
-static uint8_t hMSB = 0;
-static uint8_t hLSB = 0;
-static uint8_t tMSB = 0;
-static uint8_t tLSB = 0;
-static uint8_t parity_rcv = 0;
-
 static GPIO_InitTypeDef PORT;
 
 void
@@ -22,8 +14,8 @@ DHT22_Init (void)
   PORT.GPIO_Speed = GPIO_Speed_50MHz;
 }
 
-uint32_t
-DHT22_GetReadings (void)
+static uint8_t
+DHT22_GetReadings (dht22_data *out)
 {
   uint8_t i;
   uint16_t c;
@@ -52,7 +44,7 @@ DHT22_GetReadings (void)
   if (c >= 100)
     return DHT22_RCV_NO_RESPONSE;
 
-  // Check ACK strobe from sensor  
+  // Check ACK strobe from sensor
   while (((c = DELAY_US_TIM->CNT) < 100)
       && !(DHT22_GPIO_PORT->IDR & DHT22_GPIO_PIN))
     ;
@@ -61,7 +53,7 @@ DHT22_GetReadings (void)
 
   if ((c < 65) || (c > 95))
     return DHT22_RCV_BAD_ACK1;
-  
+
   while (((c = DELAY_US_TIM->CNT) < 100)
       && (DHT22_GPIO_PORT->IDR & DHT22_GPIO_PIN))
     ;
@@ -77,7 +69,7 @@ DHT22_GetReadings (void)
   while (i < 40)
     {
       // Measure bit start impulse (T_low = 50us)
-      
+
       while (((c = DELAY_US_TIM->CNT) < 100)
 	  && !(DHT22_GPIO_PORT->IDR & DHT22_GPIO_PIN))
 	;
@@ -85,11 +77,11 @@ DHT22_GetReadings (void)
       if (c > 75)
 	{
 	  // invalid bit start impulse length
-	  bits[i] = 0xff;
+	  out->bits[i] = 0xff;
 	  while (((c = DELAY_US_TIM->CNT) < 100)
 	      && (DHT22_GPIO_PORT->IDR & DHT22_GPIO_PIN))
 	    ;
-          DELAY_US_TIM->CNT = 0;
+	  DELAY_US_TIM->CNT = 0;
 	}
       else
 	{
@@ -98,101 +90,96 @@ DHT22_GetReadings (void)
 	  while (((c = DELAY_US_TIM->CNT) < 100)
 	      && (DHT22_GPIO_PORT->IDR & DHT22_GPIO_PIN))
 	    ;
-          DELAY_US_TIM->CNT = 0;
-	  bits[i] = (c < 100) ? (uint8_t) c : 0xff;
+	  DELAY_US_TIM->CNT = 0;
+	  out->bits[i] = (c < 100) ? (uint8_t) c : 0xff;
 	}
 
       i++;
     }
 
   for (i = 0; i < 40; i++)
-    if (bits[i] == 0xff)
+    if (out->bits[i] == 0xff)
       return DHT22_RCV_TIMEOUT;
 
   return DHT22_RCV_OK;
 }
 
-uint16_t
-DHT22_DecodeReadings (void)
+static void
+DHT22_DecodeReadings (dht22_data *out)
 {
-  uint8_t parity;
   uint8_t i = 0;
 
-  hMSB = 0;
   for (; i < 8; i++)
     {
-      hMSB <<= 1;
-      if (bits[i] > 48)
-	hMSB |= 1;
+      out->hMSB <<= 1;
+      if (out->bits[i] > 48)
+	out->hMSB |= 1;
     }
-  hLSB = 0;
+
   for (; i < 16; i++)
     {
-      hLSB <<= 1;
-      if (bits[i] > 48)
-	hLSB |= 1;
+      out->hLSB <<= 1;
+      if (out->bits[i] > 48)
+	out->hLSB |= 1;
     }
-  tMSB = 0;
+
   for (; i < 24; i++)
     {
-      tMSB <<= 1;
-      if (bits[i] > 48)
-	tMSB |= 1;
+      out->tMSB <<= 1;
+      if (out->bits[i] > 48)
+	out->tMSB |= 1;
     }
-  tLSB = 0;
+
   for (; i < 32; i++)
     {
-      tLSB <<= 1;
-      if (bits[i] > 48)
-	tLSB |= 1;
+      out->tLSB <<= 1;
+      if (out->bits[i] > 48)
+	out->tLSB |= 1;
     }
+
   for (; i < 40; i++)
     {
-      parity_rcv <<= 1;
-      if (bits[i] > 48)
-	parity_rcv |= 1;
+      out->parity_rcv <<= 1;
+      if (out->bits[i] > 48)
+	out->parity_rcv |= 1;
     }
 
-  parity = hMSB + hLSB + tMSB + tLSB;
+  out->parity = out->hMSB + out->hLSB + out->tMSB + out->tLSB;
 
-  return (parity_rcv << 8) | parity;
 }
 
-uint16_t
-DHT22_GetHumidity (void)
+static uint16_t
+DHT22_GetHumidity (dht22_data *out)
 {
-  return (hMSB << 8) + hLSB;
+  return (out->hMSB << 8) | out->hLSB;
 }
 
-uint16_t
-DHT22_GetTemperature (void)
+static uint16_t
+DHT22_GetTemperature (dht22_data *out)
 {
-  return (tMSB << 8) + tLSB;
+  return (out->tMSB << 8) | out->tLSB;
 }
 
 bool
-DHT22_Read (volatile dht22_data *out)
+DHT22_Read (dht22_data *out)
 {
-  out->rcv_response = DHT22_GetReadings ();
+  out->rcv_response = DHT22_GetReadings (out);
   if (out->rcv_response != DHT22_RCV_OK)
     {
       return false;
     }
 
-  uint32_t response = DHT22_DecodeReadings ();
+  DHT22_DecodeReadings (out);
 
-  out->received = response & 0xff;
-  out->actual = response >> 8;
-
-  if (out->received != out->actual)
+  if (out->parity != out->parity_rcv)
     {
       out->rcv_response = DHT22_BAD_DATA;
       return false;
     }
 
-  out->humidity = (float) DHT22_GetHumidity () / 10.0f;
+  out->humidity = (float) DHT22_GetHumidity (out) / 10.0f;
 
-  uint16_t temperature = DHT22_GetTemperature ();
+  uint16_t temperature = DHT22_GetTemperature (out);
   out->temperature = ((float) (temperature & 0x7fff)) / 10.0f;
 
   if (temperature & 0x8000)

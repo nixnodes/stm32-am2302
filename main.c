@@ -3,7 +3,7 @@
 
 #include <stm32f10x.h>
 
-volatile static dht22_data data;
+static dht22_data data;
 
 int main()
 {
@@ -25,7 +25,7 @@ int main()
     } else {
       /* 
         Error - check response code in data.rcv_response, for more info 
-        attach debugger and examine impulse times in uint8_t bits[40] (dht22.c) 
+        attach debugger and examine impulse times in data.bits[40] (dht22.c) 
       */
     }
 
